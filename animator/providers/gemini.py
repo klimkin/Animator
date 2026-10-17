@@ -12,8 +12,9 @@ from google import genai
 from google.genai import errors, types
 from PIL import Image
 
+from ..storyboard.narration import pcm_to_wav
 from .base import ModelNames, Narration, T
-from .beat_timing import locate_beats, pcm_to_wav
+from .beat_timing import PCM_RATE, PCM_SAMPLE_WIDTH, locate_beats
 
 DEFAULT_TEXT_MODEL = "gemini-3.8-flash"
 DEFAULT_REGION_MODEL = "gemini-3.1-flash-lite"
@@ -113,7 +114,10 @@ class GeminiNarrator:
 
     def narrate_scene(self, beats: list[str]) -> Narration:
         pcm = self.synthesize_pcm(" ".join(text.strip() for text in beats))
-        return Narration(wav=pcm_to_wav(pcm), windows=locate_beats(pcm, beats))
+        return Narration(
+            wav=pcm_to_wav(pcm, channels=1, sample_width=PCM_SAMPLE_WIDTH, rate=PCM_RATE),
+            windows=locate_beats(pcm, beats),
+        )
 
     def synthesize_pcm(self, text: str) -> bytes:
         """Raw speech: mono 16-bit PCM at 24kHz."""

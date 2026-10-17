@@ -10,6 +10,7 @@ from __future__ import annotations
 import argparse
 import os
 from collections.abc import Callable
+from pathlib import Path
 
 from .base import LLM, Narrator
 
@@ -20,6 +21,28 @@ def env_key(*names: str) -> str:
             return value
     alternatives = "".join(f" (or {name})" for name in names[1:])
     raise ValueError(f"needs {names[0]}{alternatives} in the environment")
+
+
+def required_file(args: argparse.Namespace, attr: str) -> Path:
+    flag = "--" + attr.replace("_", "-")
+    if not (value := getattr(args, attr)):
+        raise ValueError(f"--tts {args.tts} needs {flag}")
+    if not Path(value).is_file():
+        raise ValueError(f"{flag} file not found: {value}")
+    return Path(value)
+
+
+def read_transcript(path: Path) -> str:
+    """A voice reference transcript as one line. UTF-8, with a cp1252 fallback
+    for files saved by Windows tools."""
+    data = path.read_bytes()
+    try:
+        text = data.decode("utf-8-sig")
+    except UnicodeDecodeError:
+        text = data.decode("cp1252", errors="replace")
+    if not (text := " ".join(text.split())):
+        raise ValueError(f"voice reference transcript is empty: {path}")
+    return text
 
 
 def gemini_key() -> str:
@@ -44,6 +67,18 @@ def gemini_narrator(args: argparse.Namespace) -> Narrator:
     return GeminiNarrator(gemini_key(), args.tts_model or DEFAULT_TTS_MODEL, args.voice)
 
 
+def audiocpp_narrator(args: argparse.Namespace) -> Narrator:
+    from .audiocpp import AudioCppNarrator
+
+    return AudioCppNarrator(
+        cli=required_file(args, "audiocpp_cli"),
+        model=required_file(args, "tts_model"),
+        voice_ref=required_file(args, "voice_ref"),
+        reference_text=read_transcript(required_file(args, "voice_ref_text")),
+        backend=args.tts_backend,
+    )
+
+
 LLMS: dict[str, Callable[[argparse.Namespace], LLM]] = {
     "gemini": gemini_llm,
     "openrouter": openrouter_llm,
@@ -51,4 +86,5 @@ LLMS: dict[str, Callable[[argparse.Namespace], LLM]] = {
 
 NARRATORS: dict[str, Callable[[argparse.Namespace], Narrator]] = {
     "gemini": gemini_narrator,
+    "audiocpp": audiocpp_narrator,
 }

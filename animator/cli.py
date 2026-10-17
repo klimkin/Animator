@@ -111,8 +111,18 @@ def build_parser() -> argparse.ArgumentParser:
                         help="Gemini TTS voice name for --prompt narration (default: Kore)")
     parser.add_argument("--image-model", default=None,
                         help="image model for --prompt scene art")
+    parser.add_argument("--tts", choices=list(NARRATORS), default="gemini",
+                        help="narration backend for --prompt (default: gemini)")
     parser.add_argument("--tts-model", default=None,
-                        help="Gemini TTS model for --prompt narration")
+                        help="Gemini TTS model, or audio.cpp GGUF path (required for audiocpp)")
+    parser.add_argument("--audiocpp-cli", default=None,
+                        help="path to the audiocpp_cli executable (required for --tts audiocpp)")
+    parser.add_argument("--tts-backend", default="cuda",
+                        help="audio.cpp compute backend, e.g. cuda, vulkan, cpu (default: cuda)")
+    parser.add_argument("--voice-ref", default=None,
+                        help="WAV of the voice to clone, for local TTS")
+    parser.add_argument("--voice-ref-text", default=None,
+                        help="text file with the transcript of --voice-ref")
     parser.add_argument("--save-storyboard", action="store_true",
                         help="keep generated images/audio/regions next to the output "
                              "instead of discarding them after rendering")
@@ -125,7 +135,7 @@ def run_from_prompt(args: argparse.Namespace) -> int:
     validate_output(output, [])
     require_tools(need_ffprobe=True)
     llm = LLMS[args.llm](args)
-    narrator = NARRATORS["gemini"](args)
+    narrator = NARRATORS[args.tts](args)
 
     options = StoryboardOptions(
         idea=args.prompt,

@@ -1,8 +1,6 @@
 """Find where each beat is spoken inside one continuous PCM take."""
 from __future__ import annotations
 
-import io
-import wave
 from typing import List, Tuple
 
 import numpy as np
@@ -64,13 +62,3 @@ def locate_beats(pcm: bytes, beats: List[str]) -> List[List[float]]:
         start = pause[1]
     windows.append([round(start, 3), round(total, 3)])
     return windows
-
-
-def pcm_to_wav(pcm: bytes, *, channels: int = 1, sample_width: int = PCM_SAMPLE_WIDTH, rate: int = PCM_RATE) -> bytes:
-    buf = io.BytesIO()
-    with wave.open(buf, "wb") as wav_file:
-        wav_file.setnchannels(channels)
-        wav_file.setsampwidth(sample_width)
-        wav_file.setframerate(rate)
-        wav_file.writeframes(pcm)
-    return buf.getvalue()
