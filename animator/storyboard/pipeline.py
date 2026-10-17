@@ -1,5 +1,5 @@
-"""STEP 5 orchestrator for --prompt: idea -> storyboard -> scene images and
-narration -> regions -> one rendered video. Start reading here."""
+"""STEP 5 orchestrator for --prompt: idea -> storyboard -> (scene images ->
+regions) alongside narration -> one rendered video. Start reading here."""
 from __future__ import annotations
 
 import asyncio
@@ -9,6 +9,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from ..providers.base import LLM, ModelNames, Narrator
+from ..regions import SnippetRegionPlan
 from ..render import Scene, render_video
 from .detect import detect_region_plan
 from .images import generate_scene_image
@@ -26,10 +27,12 @@ class StoryboardOptions:
     save_assets: bool = False
 
 
-async def detect_scene(
-    llm: LLM, options: StoryboardOptions, image_path: Path, audio_path: Path,
-    index: int, scene: StoryboardScene, beat_windows: list[list[float]],
-) -> Scene:
+async def draw_scene(
+    llm: LLM, options: StoryboardOptions, asset_dir: Path, index: int, scene: StoryboardScene,
+) -> tuple[Path, SnippetRegionPlan]:
+    """Image, then regions: detection needs the image and the beat text, not the audio."""
+    image_path = asset_dir / f"scene_{index:02d}.png"
+    image_path.write_bytes(await asyncio.to_thread(generate_scene_image, llm, scene, options.models.image))
     region_plan = await asyncio.to_thread(
         detect_region_plan,
         llm,
@@ -39,12 +42,8 @@ async def detect_scene(
         options.models.region,
         [beat.narration for beat in scene.beats],
     )
-    region_plan.beat_windows = beat_windows
-    if options.save_assets:
-        region_path = image_path.with_name(f"scene_{index:02d}.regions.json")
-        region_path.write_text(region_plan.model_dump_json(indent=2))
-    print(f"  scene {index + 1} ready: {scene.title}", file=sys.stderr)
-    return Scene(image=str(image_path), audio=str(audio_path), region_plan=region_plan)
+    print(f"  scene {index + 1} drawn: {scene.title}", file=sys.stderr)
+    return image_path, region_plan
 
 
 async def render_storyboard(
@@ -57,23 +56,19 @@ async def render_storyboard(
     if options.save_assets:
         (asset_dir / "storyboard.json").write_text(plan.model_dump_json(indent=2))
 
-    # STEPS 2-3: every image in parallel, alongside one narrate() call for the whole video
-    images, narrations = await asyncio.gather(
-        asyncio.gather(*(
-            asyncio.to_thread(generate_scene_image, llm, scene, options.models.image) for scene in plan.scenes
-        )),
+    # STEPS 2-4: every scene's image and regions in parallel, alongside one narrate() call for the whole video
+    drawn, narrations = await asyncio.gather(
+        asyncio.gather(*(draw_scene(llm, options, asset_dir, index, scene) for index, scene in enumerate(plan.scenes))),
         asyncio.to_thread(narrator.narrate, [[beat.narration for beat in scene.beats] for scene in plan.scenes]),
     )
-    detections = []
-    for index, (scene, image_bytes, narration) in enumerate(zip(plan.scenes, images, narrations, strict=True)):
-        image_path = asset_dir / f"scene_{index:02d}.png"
-        image_path.write_bytes(image_bytes)
+    scenes = []
+    for index, ((image_path, region_plan), narration) in enumerate(zip(drawn, narrations, strict=True)):
         audio_path = asset_dir / f"scene_{index:02d}.wav"
         audio_path.write_bytes(narration.wav)
-        detections.append(detect_scene(llm, options, image_path, audio_path, index, scene, narration.windows))
-
-    # STEP 4
-    scenes = await asyncio.gather(*detections)
+        region_plan.beat_windows = narration.windows
+        if options.save_assets:
+            (asset_dir / f"scene_{index:02d}.regions.json").write_text(region_plan.model_dump_json(indent=2))
+        scenes.append(Scene(image=str(image_path), audio=str(audio_path), region_plan=region_plan))
     # STEP 5
     return render_video(scenes, str(options.output), quality=options.quality)
 
