@@ -79,6 +79,14 @@ def audiocpp_narrator(args: argparse.Namespace) -> Narrator:
     )
 
 
+def voxcpm_narrator(args: argparse.Namespace) -> Narrator:
+    from .voxcpm import DEFAULT_MODEL, VoxCPMNarrator
+
+    voice_ref = required_file(args, "voice_ref") if args.voice_ref else None
+    transcript = read_transcript(required_file(args, "voice_ref_text")) if args.voice_ref_text else None
+    return VoxCPMNarrator(args.tts_model or DEFAULT_MODEL, voice_ref, transcript)
+
+
 LLMS: dict[str, Callable[[argparse.Namespace], LLM]] = {
     "gemini": gemini_llm,
     "openrouter": openrouter_llm,
@@ -87,4 +95,5 @@ LLMS: dict[str, Callable[[argparse.Namespace], LLM]] = {
 NARRATORS: dict[str, Callable[[argparse.Namespace], Narrator]] = {
     "gemini": gemini_narrator,
     "audiocpp": audiocpp_narrator,
+    "voxcpm": voxcpm_narrator,
 }

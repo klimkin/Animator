@@ -114,7 +114,8 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--tts", choices=list(NARRATORS), default="gemini",
                         help="narration backend for --prompt (default: gemini)")
     parser.add_argument("--tts-model", default=None,
-                        help="Gemini TTS model, or audio.cpp GGUF path (required for audiocpp)")
+                        help="Gemini TTS model, audio.cpp GGUF path (required for audiocpp) "
+                             "or VoxCPM model id (default: openbmb/VoxCPM2)")
     parser.add_argument("--audiocpp-cli", default=None,
                         help="path to the audiocpp_cli executable (required for --tts audiocpp)")
     parser.add_argument("--tts-backend", default="cuda",
