@@ -91,9 +91,11 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--regions", nargs="*", default=[],
                         help="one region plan JSON per image, in the same order")
     parser.add_argument("--detect-regions", action="store_true",
-                        help="ask Gemini for a region plan per image (needs GEMINI_API_KEY)")
+                        help="ask the --llm backend for a region plan per image")
     parser.add_argument("--narration", nargs="*", default=[],
                         help="narration text per image, used by --detect-regions")
+    parser.add_argument("--llm", choices=list(LLMS), default="gemini",
+                        help="backend for storyboard text, scene images and region detection (default: gemini)")
     parser.add_argument("--text-model", default=None,
                         help="storyboard text model (Gemini default: $GEMINI_MODEL or a built-in default)")
     parser.add_argument("--region-model", default=None,
@@ -102,9 +104,9 @@ def build_parser() -> argparse.ArgumentParser:
                         help="write detected plans next to the output as <output>.regions.<n>.json")
     parser.add_argument("--prompt", default=None,
                         help="generate a full storyboard (images, narration, regions) from one idea "
-                             "via Gemini, instead of passing images; needs GEMINI_API_KEY")
+                             "instead of passing images; needs the chosen backends' API keys")
     parser.add_argument("--scenes", type=int, default=None,
-                        help="number of scenes when using --prompt (default: let Gemini decide)")
+                        help="number of scenes when using --prompt (default: let the LLM decide)")
     parser.add_argument("--voice", default="Kore",
                         help="Gemini TTS voice name for --prompt narration (default: Kore)")
     parser.add_argument("--image-model", default=None,
@@ -122,7 +124,7 @@ def run_from_prompt(args: argparse.Namespace) -> int:
     output = Path(args.output)
     validate_output(output, [])
     require_tools(need_ffprobe=True)
-    llm = LLMS["gemini"](args)
+    llm = LLMS[args.llm](args)
     narrator = NARRATORS["gemini"](args)
 
     options = StoryboardOptions(
@@ -163,7 +165,7 @@ def run_cli(args: argparse.Namespace) -> int:
         raise SystemExit(f"expected {n} narration strings, got {len(args.narration)}")
 
     validate_inputs(args)
-    llm = LLMS["gemini"](args) if args.detect_regions else None
+    llm = LLMS[args.llm](args) if args.detect_regions else None
     scenes = []
     for index, image in enumerate(args.images):
         plan = load_plan(args.regions[index]) if args.regions else None

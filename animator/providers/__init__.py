@@ -32,6 +32,12 @@ def gemini_llm(args: argparse.Namespace) -> LLM:
     return GeminiLLM(gemini_key())
 
 
+def openrouter_llm(args: argparse.Namespace) -> LLM:
+    from .openrouter import OpenRouterLLM
+
+    return OpenRouterLLM(env_key("OPENROUTER_API_KEY"))
+
+
 def gemini_narrator(args: argparse.Namespace) -> Narrator:
     from .gemini import DEFAULT_TTS_MODEL, GeminiNarrator
 
@@ -40,6 +46,7 @@ def gemini_narrator(args: argparse.Namespace) -> Narrator:
 
 LLMS: dict[str, Callable[[argparse.Namespace], LLM]] = {
     "gemini": gemini_llm,
+    "openrouter": openrouter_llm,
 }
 
 NARRATORS: dict[str, Callable[[argparse.Namespace], Narrator]] = {
