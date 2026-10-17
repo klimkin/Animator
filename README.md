@@ -150,6 +150,28 @@ python -m animator --prompt "How photosynthesis works" -o photosynthesis.mp4
 | `--text-model`, `--region-model`, `--image-model`, `--tts-model` | Override the models |
 | `-v` | Show progress logs |
 
+### Other backends
+
+Gemini is the default for everything. `--llm` picks who writes the script, draws the scenes and finds the regions; `--tts` picks who speaks.
+
+| Flag | Backend | Needs |
+|---|---|---|
+| `--llm openrouter` | [OpenRouter](https://openrouter.ai) | `OPENROUTER_API_KEY`; model defaults are the same Gemini models under `google/` |
+| `--tts audiocpp` | [audio.cpp](https://github.com/0xShug0/audio.cpp) with a Qwen3-TTS GGUF model | `--audiocpp-cli`, `--tts-model`, `--voice-ref`, `--voice-ref-text` |
+| `--tts voxcpm` | [VoxCPM](https://github.com/OpenBMB/VoxCPM), in-process | `pip install voxcpm`; `--tts-model` defaults to `openbmb/VoxCPM2` |
+
+```bash
+python -m animator --prompt "Why do feathers have their shape?" --scenes 3 -o feather.mp4 \
+    --llm openrouter \
+    --tts audiocpp --tts-model F:/models/qwen3-tts-1.7b-q8.gguf --audiocpp-cli F:/audio_cpp/audiocpp_cli.exe \
+    --voice-ref voice.wav --voice-ref-text voice.txt
+
+python -m animator --prompt "..." -o x.mp4 --llm openrouter --tts voxcpm \
+    --voice-ref voice.wav --voice-ref-text voice.txt
+```
+
+`--voice-ref` is a WAV of the voice to clone and `--voice-ref-text` a text file with what it says. VoxCPM can also run without them, in its own voice. audio.cpp runs on CUDA unless you pass `--tts-backend` (for example `vulkan` or `cpu`). `--text-model`, `--region-model` and `--image-model` take the chosen LLM backend's model names.
+
 ### From your own images
 
 No API key is needed for these.

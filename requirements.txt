@@ -9,6 +9,7 @@ pydantic>=2
 # --prompt / --detect-regions (Gemini)
 google-genai>=1.0
 python-dotenv>=1.0
+# --tts voxcpm only: pip install voxcpm (pulls in PyTorch)
 
 # web API (python -m animator.api)
 fastapi>=0.115
