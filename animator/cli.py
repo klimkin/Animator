@@ -3,10 +3,8 @@
 from __future__ import annotations
 
 import argparse
-import asyncio
 import logging
 import math
-import os
 import shutil
 import subprocess
 import sys
@@ -15,8 +13,12 @@ from pathlib import Path
 from PIL import Image, UnidentifiedImageError
 from pydantic import ValidationError
 
+from .providers import LLMS, NARRATORS
+from .providers.base import ModelNames
 from .regions import SnippetRegionPlan
 from .render import Scene, render_video
+from .storyboard.detect import detect_region_plan
+from .storyboard.pipeline import StoryboardOptions, run_storyboard
 
 
 def load_plan(path: str | None) -> SnippetRegionPlan | None:
@@ -66,37 +68,12 @@ def validate_inputs(args: argparse.Namespace) -> None:
     require_tools(need_ffprobe=bool(args.audio))
 
 
-def gemini_client() -> "genai.Client":
-    try:
-        from google import genai
-    except ImportError as exc:
-        raise SystemExit(
-            "this needs the gemini extra: pip install -r requirements.txt"
-        ) from exc
-    api_key = os.environ.get("GEMINI_API_KEY") or os.environ.get("GOOGLE_API_KEY")
-    if not api_key:
-        raise SystemExit("needs GEMINI_API_KEY (or GOOGLE_API_KEY) in the environment")
-    return genai.Client(api_key=api_key)
-
-
-def resolve_model(cli_model: str | None, default: str) -> str:
-    return cli_model or os.environ.get("GEMINI_MODEL") or default
-
-
-def resolve_region_model(cli_model: str | None) -> str:
-    from .gemini.settings import DEFAULT_REGION_MODEL
-    return resolve_model(cli_model, DEFAULT_REGION_MODEL)
-
-
-def detect_plan(image: Path, narration: str, model: str | None) -> SnippetRegionPlan:
-    from .gemini.detect_regions import detect_region_plan
-
-    return asyncio.run(detect_region_plan(
-        google_client=gemini_client(),
-        image_path=image,
-        transcript_text=narration,
-        model=resolve_region_model(model),
-    ))
+def resolve_models(args: argparse.Namespace, defaults: ModelNames) -> ModelNames:
+    return ModelNames(
+        text=args.text_model or defaults.text,
+        region=args.region_model or defaults.region,
+        image=args.image_model or defaults.image,
+    )
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -117,9 +94,10 @@ def build_parser() -> argparse.ArgumentParser:
                         help="ask Gemini for a region plan per image (needs GEMINI_API_KEY)")
     parser.add_argument("--narration", nargs="*", default=[],
                         help="narration text per image, used by --detect-regions")
-    parser.add_argument("--gemini-model", default=None,
-                        help="text model for region/storyboard generation "
-                             "(default: $GEMINI_MODEL or a built-in default)")
+    parser.add_argument("--text-model", default=None,
+                        help="storyboard text model (Gemini default: $GEMINI_MODEL or a built-in default)")
+    parser.add_argument("--region-model", default=None,
+                        help="region detection vision model (Gemini default: $GEMINI_MODEL or a built-in default)")
     parser.add_argument("--save-regions", action="store_true",
                         help="write detected plans next to the output as <output>.regions.<n>.json")
     parser.add_argument("--prompt", default=None,
@@ -130,7 +108,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--voice", default="Kore",
                         help="Gemini TTS voice name for --prompt narration (default: Kore)")
     parser.add_argument("--image-model", default=None,
-                        help="Gemini image model for --prompt scene art")
+                        help="image model for --prompt scene art")
     parser.add_argument("--tts-model", default=None,
                         help="Gemini TTS model for --prompt narration")
     parser.add_argument("--save-storyboard", action="store_true",
@@ -141,26 +119,21 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def run_from_prompt(args: argparse.Namespace) -> int:
-    from .gemini.pipeline import StoryboardOptions, run_storyboard
-    from .gemini.settings import DEFAULT_IMAGE_MODEL, DEFAULT_TEXT_MODEL, DEFAULT_TTS_MODEL
-
     output = Path(args.output)
     validate_output(output, [])
     require_tools(need_ffprobe=True)
+    llm = LLMS["gemini"](args)
+    narrator = NARRATORS["gemini"](args)
 
     options = StoryboardOptions(
         idea=args.prompt,
         output=output,
         quality=args.quality,
-        text_model=resolve_model(args.gemini_model, DEFAULT_TEXT_MODEL),
-        region_model=resolve_region_model(args.gemini_model),
-        image_model=args.image_model or DEFAULT_IMAGE_MODEL,
-        tts_model=args.tts_model or DEFAULT_TTS_MODEL,
-        voice=args.voice,
+        models=resolve_models(args, llm.defaults),
         num_scenes=args.scenes,
         save_assets=args.save_storyboard,
     )
-    durations = run_storyboard(gemini_client(), options)
+    durations = run_storyboard(llm, narrator, options)
     print(f"wrote {args.output} ({sum(durations):.1f}s, {len(durations)} scene(s))", file=sys.stderr)
     return 0
 
@@ -190,12 +163,14 @@ def run_cli(args: argparse.Namespace) -> int:
         raise SystemExit(f"expected {n} narration strings, got {len(args.narration)}")
 
     validate_inputs(args)
+    llm = LLMS["gemini"](args) if args.detect_regions else None
     scenes = []
     for index, image in enumerate(args.images):
         plan = load_plan(args.regions[index]) if args.regions else None
-        if args.detect_regions:
+        if llm is not None:
             narration = args.narration[index] if args.narration else ""
-            plan = detect_plan(Path(image), narration, args.gemini_model)
+            region_model = args.region_model or llm.defaults.region
+            plan = detect_region_plan(llm, Path(image), narration, "", region_model)
             if args.save_regions:
                 plan_path = f"{args.output}.regions.{index}.json"
                 Path(plan_path).write_text(plan.model_dump_json(indent=2))

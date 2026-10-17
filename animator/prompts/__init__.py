@@ -1,7 +1,7 @@
 """Every LLM prompt the package sends, as editable text templates.
 
 Templates use str.format placeholders, e.g. {idea}. Code that fills them lives
-next to the call that sends them, in animator/gemini/.
+next to the call that sends them, in animator/storyboard/.
 """
 from importlib.resources import files
 

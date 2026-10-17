@@ -7,8 +7,7 @@ import logging
 from google import genai
 from google.genai import errors
 
-from ..cli import resolve_model
-from ..gemini.settings import DEFAULT_TEXT_MODEL
+from ..providers.gemini import default_models
 
 log = logging.getLogger(__name__)
 
@@ -26,7 +25,7 @@ def check_key(api_key: str) -> None:
     the video then starts, and if Gemini really is unusable it fails with its actual reason.
     """
     try:
-        genai.Client(api_key=api_key).models.get(model=resolve_model(None, DEFAULT_TEXT_MODEL))
+        genai.Client(api_key=api_key).models.get(model=default_models().text)
     except errors.ClientError as exc:
         # a bad or revoked key: 400 API_KEY_INVALID, or 401/403
         if exc.code in (401, 403) or (exc.code == 400 and "api key" in str(exc).lower()):

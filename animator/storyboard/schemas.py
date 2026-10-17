@@ -1,4 +1,4 @@
-"""Structured-output models Gemini fills in."""
+"""Structured-output models the LLM fills in."""
 from __future__ import annotations
 
 import re

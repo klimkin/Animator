@@ -17,11 +17,8 @@ import threading
 from functools import cache
 from pathlib import Path
 
-from google import genai
-
-from ..cli import resolve_model, resolve_region_model
-from ..gemini.pipeline import StoryboardOptions, run_storyboard
-from ..gemini.settings import DEFAULT_IMAGE_MODEL, DEFAULT_TEXT_MODEL, DEFAULT_TTS_MODEL
+from ..providers.gemini import GeminiLLM, GeminiNarrator
+from ..storyboard.pipeline import StoryboardOptions, run_storyboard
 from . import supabase
 from .settings import get_settings
 
@@ -50,18 +47,15 @@ def run_job(video: dict, api_key: str) -> None:
 
 
 def _render(video: dict, output: Path, api_key: str) -> list[float]:
+    llm = GeminiLLM(api_key)
     options = StoryboardOptions(
         idea=video["prompt"],
         output=output,
         quality=video["quality"],
-        text_model=resolve_model(None, DEFAULT_TEXT_MODEL),
-        region_model=resolve_region_model(None),
-        image_model=DEFAULT_IMAGE_MODEL,
-        tts_model=DEFAULT_TTS_MODEL,
-        voice=video["voice"],
+        models=llm.defaults,
         num_scenes=video["scenes"],
     )
-    return run_storyboard(genai.Client(api_key=api_key), options)
+    return run_storyboard(llm, GeminiNarrator(api_key, voice=video["voice"]), options)
 
 
 def _finish(video: dict, storage_path: str, durations: list[float]) -> None:

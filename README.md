@@ -147,7 +147,7 @@ python -m animator --prompt "How photosynthesis works" -o photosynthesis.mp4
 | `--voice NAME` | Gemini TTS voice (default `Kore`) |
 | `--quality low\|medium\|high` | 20fps/500k, 24fps/1500k (default), 24fps/3000k |
 | `--save-storyboard` | Keep the script, images, audio and region plans in `<output>.storyboard/` |
-| `--gemini-model`, `--image-model`, `--tts-model` | Override the Gemini models |
+| `--text-model`, `--region-model`, `--image-model`, `--tts-model` | Override the models |
 | `-v` | Show progress logs |
 
 ### From your own images
@@ -196,7 +196,8 @@ Edit them and run again. No code changes are needed.
 ```
 animator/
   prompts/      every prompt, as editable .txt files
-  gemini/       storyboard → images → narration → regions → pipeline
+  storyboard/   script → images + narration → regions → pipeline
+  providers/    LLM and narrator backends (Gemini by default)
   engine.py     drawing engine (ordering, stroke tracing, fills)
   render.py     scenes → MP4 via FFmpeg
   cli.py        command line

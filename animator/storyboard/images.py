@@ -1,13 +1,9 @@
 """STEP 2: draw one storyboard scene as a 16:9 whiteboard image."""
 from __future__ import annotations
 
-from google import genai
-from google.genai import types
-
 from ..prompts import load_prompt
-from .client import first_inline_data, with_retry
+from ..providers.base import LLM
 from .schemas import StoryboardScene
-from .settings import DEFAULT_IMAGE_MODEL
 
 
 def build_image_prompt(scene: StoryboardScene) -> str:
@@ -24,19 +20,6 @@ def build_image_prompt(scene: StoryboardScene) -> str:
     return f"{frame}\n{load_prompt('image_style')}"
 
 
-def generate_scene_image(
-    google_client: genai.Client,
-    scene: StoryboardScene,
-    *,
-    model: str = DEFAULT_IMAGE_MODEL,
-) -> bytes:
+def generate_scene_image(llm: LLM, scene: StoryboardScene, model: str) -> bytes:
     """Render one frame of separate flat doodle icons. Returns image bytes."""
-    response = with_retry(lambda: google_client.models.generate_content(
-        model=model,
-        contents=build_image_prompt(scene),
-        config=types.GenerateContentConfig(
-            response_modalities=["IMAGE"],
-            image_config=types.ImageConfig(aspect_ratio="16:9"),
-        ),
-    ))
-    return first_inline_data(response, "Image generation")
+    return llm.image(model, build_image_prompt(scene))
